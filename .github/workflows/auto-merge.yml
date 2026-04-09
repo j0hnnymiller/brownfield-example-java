@@ -14,7 +14,7 @@ jobs:
   test-for-workflow:
     name: Alva test workflow
     uses: DevSkillsHQ/publish-test-results-workflow/.github/workflows/publish-test-results.yml@main
-  
+
   # Verifies the boilerplate can start and run in codespace environment
   test-for-codespaces:
     runs-on: ubuntu-latest
@@ -29,34 +29,42 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Install root dependencies
+        run: npm ci
+      - name: Install frontend dependencies
+        run: npm --prefix app-frontend ci
+      - name: Run backend unit tests
+        run: cd app-backend && ./gradlew test
+      - name: Run frontend unit tests
+        run: npm --prefix app-frontend test -- --run
       - name: Install jq
         run: sudo apt-get install jq
       - name: Fetch apiUrl
+        id: api-url
         run: |
           apiUrl=$(grep "apiUrl:" cypress.config.js | awk -F": " '{print $2}' | tr -d "'," || echo "")
 
           if [[ ! -z "$apiUrl" ]]; then
             apiUrl="$apiUrl/ping"
           fi
-          
-          echo "apiUrl=$apiUrl" >> $GITHUB_ENV
+
+          echo "value=$apiUrl" >> $GITHUB_OUTPUT
 
         shell: bash
       # Running tests for all challenges except Backend.
       - name: Run tests without waiting on API
-        if: env.apiUrl == ''
+        if: steps.api-url.outputs.value == ''
         uses: cypress-io/github-action@v5
         with:
           build: npm run build
           start: npm run start
       - name: Run tests with waiting on API
-        if: env.apiUrl != ''
+        if: steps.api-url.outputs.value != ''
         uses: cypress-io/github-action@v5
         with:
           build: npm run build
           start: npm run start
-          wait-on: ${{ env.apiUrl }}
-
+          wait-on: ${{ steps.api-url.outputs.value }}
 
   auto-merge-dependabot:
     needs:
@@ -71,7 +79,11 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
       - name: Enable auto-merge for Dependabot PRs
+        if: steps.metadata.outputs.update-type == 'version-update:semver-patch'
         run: gh pr merge --auto --merge "$PR_URL"
         env:
           PR_URL: ${{github.event.pull_request.html_url}}
           GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
+      - name: Skip auto-merge for non-patch updates
+        if: steps.metadata.outputs.update-type != 'version-update:semver-patch'
+        run: echo "Skipping auto-merge for ${{ steps.metadata.outputs.update-type }}"

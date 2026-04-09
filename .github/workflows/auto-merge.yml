@@ -14,7 +14,7 @@ jobs:
   test-for-workflow:
     name: Alva test workflow
     uses: DevSkillsHQ/publish-test-results-workflow/.github/workflows/publish-test-results.yml@main
-  
+
   # Verifies the boilerplate can start and run in codespace environment
   test-for-codespaces:
     runs-on: ubuntu-latest
@@ -38,7 +38,7 @@ jobs:
           if [[ ! -z "$apiUrl" ]]; then
             apiUrl="$apiUrl/ping"
           fi
-          
+
           echo "apiUrl=$apiUrl" >> $GITHUB_ENV
 
         shell: bash
@@ -57,7 +57,6 @@ jobs:
           start: npm run start
           wait-on: ${{ env.apiUrl }}
 
-
   auto-merge-dependabot:
     needs:
       - test-for-workflow
@@ -70,8 +69,59 @@ jobs:
         uses: dependabot/fetch-metadata@v1
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-      - name: Enable auto-merge for Dependabot PRs
-        run: gh pr merge --auto --merge "$PR_URL"
+
+      - name: Check update type and decide on auto-merge
+        id: check-update
+        run: |
+          UPDATE_TYPE="${{ steps.metadata.outputs.update-type }}"
+          echo "Update type: $UPDATE_TYPE"
+
+          # Only auto-merge patch updates (e.g., 1.0.0 -> 1.0.1)
+          # Patch updates typically contain bug fixes and security patches
+          # Minor and major updates may introduce breaking changes
+          if [ "$UPDATE_TYPE" == "version-update:semver-patch" ]; then
+            echo "auto_merge=true" >> $GITHUB_OUTPUT
+            echo "reason=Patch update - typically safe for auto-merge" >> $GITHUB_OUTPUT
+          else
+            echo "auto_merge=false" >> $GITHUB_OUTPUT
+            echo "reason=Non-patch update ($UPDATE_TYPE) - requires manual review" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Enable auto-merge for patch updates only
+        if: steps.check-update.outputs.auto_merge == 'true'
+        run: |
+          echo "Auto-merging patch update: ${{ steps.check-update.outputs.reason }}"
+          gh pr merge --auto --merge "$PR_URL"
         env:
           PR_URL: ${{github.event.pull_request.html_url}}
           GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
+
+      - name: Comment on PR for manual review
+        if: steps.check-update.outputs.auto_merge == 'false'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `⚠️ **Manual Review Required**
+
+              This PR contains a **${{ steps.metadata.outputs.update-type }}** dependency update.
+
+              **Reason:** ${{ steps.check-update.outputs.reason }}
+
+              **What to check:**
+              - Review the changelog for breaking changes
+              - Verify all tests pass (backend unit tests, frontend unit tests, e2e tests)
+              - Test the application manually if needed
+              - Check for deprecation warnings in the build output
+
+              **Auto-merge policy:**
+              - ✅ Patch updates (x.x.X): Auto-merged after tests pass
+              - ⚠️ Minor updates (x.X.x): Requires manual review
+              - ⚠️ Major updates (X.x.x): Requires manual review
+
+              Once reviewed, you can merge this PR manually.`
+            })

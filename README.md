@@ -28,9 +28,44 @@ A backbone for your coding challenge.
 - Cypress
 - GitHub Actions
 
+## Security Configuration
+
+🔒 **Important**: This application implements security best practices including:
+
+- **Profile-based CORS**: Permissive CORS only in development mode
+- **Environment-based credentials**: No hardcoded passwords in production
+- **Safe database migrations**: Schema validation by default, updates only in dev mode
+
+For detailed security documentation, see [app-backend/SECURITY.md](app-backend/SECURITY.md).
+
+### Running in Development Mode
+
+To enable development-friendly settings (permissive CORS, auto-schema updates):
+
+```bash
+# Set the dev profile
+export SPRING_PROFILES_ACTIVE=dev  # Linux/Mac
+# or
+$env:SPRING_PROFILES_ACTIVE="dev"  # Windows PowerShell
+
+npm run start:backend
+```
+
+### Running in Production
+
+Production mode requires explicit configuration:
+
+```bash
+export SPRING_PROFILES_ACTIVE=prod
+export DB_USERNAME=your_username
+export DB_PASSWORD=your_password
+```
+
+See [app-backend/SECURITY.md](app-backend/SECURITY.md) for complete production setup instructions.
+
 ## Getting started
 
-1. Make sure the required version of Java (17) is configured on your local env.
+1. Make sure the required version of Java (21) is configured on your local env.
 
 2. Make sure npm & node are configured on your local env. You can download those distributions for your platform [here](https://nodejs.org/en/download/)
 

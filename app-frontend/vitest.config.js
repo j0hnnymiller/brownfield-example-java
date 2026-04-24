@@ -10,7 +10,14 @@ export default mergeConfig(
             environment: 'jsdom',
             setupFiles: ['.config/vitest-setup.js'],
             exclude: ['node_modules', 'build', '.idea', '.git', '.cache'],
-            reporters: ['basic'],
+            reporters: [
+                [
+                    'default',
+                    {
+                        summary: false
+                    }
+                ]
+            ],
             poolOptions: {
                 isolate: false,
                 singleFork: true
